@@ -361,7 +361,7 @@ func _try_refresh_input_map_ui() -> void:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return
-	var base := plugin.get_editor_interface().get_base_control()
+	var base = plugin.get_editor_interface().get_base_control()
 	var pse := _find_node_by_class(base, "ProjectSettingsEditor")
 	if not pse:
 		return
@@ -588,7 +588,7 @@ func _get_editor_log_rtl() -> RichTextLabel:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return null
-	var base := plugin.get_editor_interface().get_base_control()
+	var base = plugin.get_editor_interface().get_base_control()
 	var editor_log := _find_node_by_class(base, "EditorLog")
 	if editor_log:
 		_editor_log_rtl = _find_child_rtl(editor_log)
@@ -720,7 +720,7 @@ func get_debugger_errors(args: Dictionary) -> Dictionary:
 	var tree := _get_debugger_error_tree()
 	if not tree:
 		var plugin = Engine.get_meta("GodotMCPPlugin")
-		var base := plugin.get_editor_interface().get_base_control() if plugin else null
+		var base = plugin.get_editor_interface().get_base_control() if plugin else null
 		var debugger := _find_node_by_class(base, "ScriptEditorDebugger") if base else null
 		var debug_info := ""
 		if not debugger:
@@ -795,7 +795,7 @@ func _get_debugger_error_tree() -> Tree:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return null
-	var base := plugin.get_editor_interface().get_base_control()
+	var base = plugin.get_editor_interface().get_base_control()
 	var debugger := _find_node_by_class(base, "ScriptEditorDebugger")
 	if not debugger:
 		return null
@@ -938,7 +938,7 @@ func rescan_filesystem(_args: Dictionary) -> Dictionary:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return {&"ok": false, &"error": "No editor plugin available"}
-	var efs := plugin.get_editor_interface().get_resource_filesystem()
+	var efs = plugin.get_editor_interface().get_resource_filesystem()
 	if efs.is_scanning():
 		return {
 			&"ok": false,
@@ -965,7 +965,7 @@ func run_scene(args: Dictionary) -> Dictionary:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return {&"ok": false, &"error": "Editor plugin not available"}
-	var ei := plugin.get_editor_interface()
+	var ei = plugin.get_editor_interface()
 	# Accept both "scene" and "scene_path" — the MCP schema uses "scene" but
 	# AI callers sometimes use "scene_path" by analogy with other tools.
 	var scene: String = str(args.get(&"scene", args.get(&"scene_path", "")))
@@ -986,7 +986,7 @@ func stop_scene(_args: Dictionary) -> Dictionary:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return {&"ok": false, &"error": "Editor plugin not available"}
-	var ei := plugin.get_editor_interface()
+	var ei = plugin.get_editor_interface()
 	if not ei.is_playing_scene():
 		return {&"ok": true, &"message": "No scene is currently running"}
 	ei.stop_playing_scene()
@@ -997,9 +997,9 @@ func is_playing(_args: Dictionary) -> Dictionary:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return {&"ok": false, &"error": "Editor plugin not available"}
-	var ei := plugin.get_editor_interface()
-	var playing := ei.is_playing_scene()
-	var scene_path := ei.get_playing_scene() if playing else ""
+	var ei = plugin.get_editor_interface()
+	var playing: bool = ei.is_playing_scene()
+	var scene_path: String = ei.get_playing_scene() if playing else ""
 	return {&"ok": true, &"playing": playing, &"scene": scene_path}
 
 

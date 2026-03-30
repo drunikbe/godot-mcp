@@ -17,13 +17,25 @@ func _ready() -> void:
 
 
 func _initialize_processors() -> void:
-	_register_processor(MCPFileCommands.new(), "FileCommands")
-	_register_processor(MCPSceneCommands.new(), "SceneCommands")
-	_register_processor(MCPScriptCommands.new(), "ScriptCommands")
-	_register_processor(MCPProjectCommands.new(), "ProjectCommands")
-	_register_processor(MCPAssetCommands.new(), "AssetCommands")
-	_register_processor(MCPRuntimeCommands.new(), "RuntimeCommands")
-	_register_processor(MCPVisualizerCommands.new(), "VisualizerCommands")
+	var specs: Array[Array] = [
+		[MCPFileCommands, "FileCommands"],
+		[MCPSceneCommands, "SceneCommands"],
+		[MCPScriptCommands, "ScriptCommands"],
+		[MCPProjectCommands, "ProjectCommands"],
+		[MCPAssetCommands, "AssetCommands"],
+		[MCPRuntimeCommands, "RuntimeCommands"],
+		[MCPVisualizerCommands, "VisualizerCommands"],
+	]
+	for spec in specs:
+		var script_class = spec[0]
+		var label: String = spec[1]
+		if script_class == null:
+			push_error("[CommandHandler] Class for %s is null — script may have a parse error" % label)
+			continue
+		if not script_class.can_instantiate():
+			push_error("[CommandHandler] %s cannot be instantiated — check script for errors" % label)
+			continue
+		_register_processor(script_class.new(), label)
 
 
 func _register_processor(processor: MCPBaseCommandProcessor, node_name: String) -> void:

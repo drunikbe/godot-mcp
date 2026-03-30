@@ -45,7 +45,7 @@ func _refresh_file(path: String) -> void:
 	var plugin = Engine.get_meta("GodotMCPPlugin")
 	if not plugin:
 		return
-	var efs := plugin.get_editor_interface().get_resource_filesystem()
+	var efs = plugin.get_editor_interface().get_resource_filesystem()
 	efs.update_file(path)
 	efs.update_script_classes()
 

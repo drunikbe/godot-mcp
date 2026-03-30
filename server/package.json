@@ -19,7 +19,8 @@
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "watch": "tsc --watch",
-    "daemon": "tsx src/index.ts --http"
+    "daemon": "tsx src/index.ts --http",
+    "test": "node --test tests/server.test.mjs"
   },
   "keywords": [
     "mcp",
