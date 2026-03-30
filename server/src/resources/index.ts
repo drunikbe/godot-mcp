@@ -151,7 +151,7 @@ export async function readResource(
   const sceneMatch = uri.match(/^godot:\/\/scene\/(.+)$/);
   if (sceneMatch) {
     const scenePath = sceneMatch[1];
-    const result = await godotBridge.invokeTool('read_scene', { path: scenePath });
+    const result = await godotBridge.invokeTool('read_scene', { scene_path: scenePath });
     return { content: JSON.stringify(result, null, 2), mimeType: 'application/json' };
   }
 
