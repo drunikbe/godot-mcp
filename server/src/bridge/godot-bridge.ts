@@ -169,6 +169,8 @@ export class GodotBridge {
         if (this.godotInfo) {
           this.godotInfo.projectPath = message.project_path;
           this.log('info', `Godot project: ${message.project_path}`);
+          // Notify again with project path populated — waitForConnection resolves here
+          this.notifyConnectionChange(true, this.godotInfo);
         }
         break;
       default:
@@ -261,6 +263,30 @@ export class GodotBridge {
 
   offConnectionChange(callback: ConnectionCallback): void {
     this.connectionCallbacks.delete(callback);
+  }
+
+  waitForConnection(timeoutMs: number = 30000): Promise<GodotInfo> {
+    // Resolve only after godot_ready (projectPath populated), not just TCP connect
+    if (this.isConnected() && this.godotInfo?.projectPath) {
+      return Promise.resolve(this.godotInfo);
+    }
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.offConnectionChange(handler);
+        reject(new Error(`Godot did not connect within ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      const handler: ConnectionCallback = (connected, info) => {
+        if (connected && info?.projectPath) {
+          clearTimeout(timer);
+          this.offConnectionChange(handler);
+          resolve(info);
+        }
+      };
+
+      this.connectionCallbacks.add(handler);
+    });
   }
 
   private notifyConnectionChange(connected: boolean, info?: GodotInfo): void {

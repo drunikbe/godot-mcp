@@ -131,10 +131,10 @@ describe('MCP Server', () => {
       ({ sessionId } = await initSession());
     });
 
-    it('lists all 51 tools', async () => {
+    it('lists all 61 tools', async () => {
       const res = await mcpRequest('tools/list', {}, sessionId);
       const tools = res.result.tools;
-      assert.equal(tools.length, 51, `Expected 51 tools, got ${tools.length}`);
+      assert.equal(tools.length, 61, `Expected 61 tools, got ${tools.length}`);
     });
 
     it('includes get_godot_status built-in tool', async () => {
@@ -155,6 +155,10 @@ describe('MCP Server', () => {
         asset: ['generate_2d_asset'],
         runtime: ['game_screenshot', 'game_scene_tree'],
         visualizer: ['debug_draw_overlay', 'highlight_node', 'performance_stats'],
+        lifecycle: ['start_godot', 'stop_godot', 'godot_process_status'],
+        eval: ['eval_expression', 'eval_editor_expression'],
+        input: ['send_input_action', 'send_key_event'],
+        assert: ['assert_property', 'assert_node_exists', 'wait_for_condition'],
       };
 
       for (const [cat, tools] of Object.entries(categories)) {
@@ -189,6 +193,15 @@ describe('MCP Server', () => {
       const body = JSON.parse(res.result.content[0].text);
       assert.ok(body.error.includes('not connected'));
       assert.ok(body.hint);
+    });
+
+    it('lifecycle tools work without Godot connection', async () => {
+      const res = await mcpRequest('tools/call',
+        { name: 'godot_process_status', arguments: {} }, sessionId);
+      assert.equal(res.result.isError, undefined);
+      const body = JSON.parse(res.result.content[0].text);
+      assert.equal(body.connected, false);
+      assert.equal(body.managed, false);
     });
 
     it('unknown tool returns proper MCP error', async () => {

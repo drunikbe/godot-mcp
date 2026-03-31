@@ -14,6 +14,8 @@ import { projectTools } from './project-tools.js';
 import { assetTools } from './asset-tools.js';
 import { runtimeTools } from './runtime-tools.js';
 import { visualizerTools } from './visualizer-tools.js';
+import { lifecycleTools } from './lifecycle-tools.js';
+import { assertTools } from './assert-tools.js';
 
 export const allTools: ToolDefinition[] = [
   ...fileTools,
@@ -23,6 +25,8 @@ export const allTools: ToolDefinition[] = [
   ...assetTools,
   ...runtimeTools,
   ...visualizerTools,
+  ...lifecycleTools,
+  ...assertTools,
 ];
 
 export function toolExists(toolName: string): boolean {

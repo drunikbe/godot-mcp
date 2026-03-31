@@ -31,6 +31,7 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'child_process';
 import { readFileSync } from 'node:fs';
 import { GodotBridge } from './bridge/godot-bridge.js';
+import { GodotProcess } from './bridge/godot-process.js';
 import { createMcpServer } from './server.js';
 
 const VERSION = JSON.parse(
@@ -44,6 +45,12 @@ const IDLE_SHUTDOWN_MS = parseInt(process.env.GODOT_MCP_IDLE_TIMEOUT_MS || '3000
 const cliArgs = process.argv.slice(2);
 const httpMode = cliArgs.includes('--http');
 const noForce = cliArgs.includes('--no-force');
+
+// --project <path>: enable Godot process management
+const projectFlagIdx = cliArgs.indexOf('--project');
+const rawProjectArg = projectFlagIdx >= 0 ? cliArgs[projectFlagIdx + 1] : undefined;
+const projectPath = (rawProjectArg && !rawProjectArg.startsWith('--')) ? rawProjectArg : process.env.GODOT_MCP_PROJECT;
+const godotProcess = projectPath ? new GodotProcess(process.env.GODOT_PATH) : undefined;
 
 const godotBridge = new GodotBridge(WEBSOCKET_PORT, TOOL_TIMEOUT);
 
@@ -144,6 +151,18 @@ async function main() {
 
   console.error(`[godot-mcp] Waiting for Godot editor connection on port ${WEBSOCKET_PORT}...`);
 
+  // Auto-start Godot if --project was provided
+  if (godotProcess && projectPath) {
+    console.error(`[godot-mcp] Auto-starting Godot for project: ${projectPath}`);
+    try {
+      await godotProcess.start(godotBridge, { projectPath, headless: true });
+      console.error(`[godot-mcp] Godot connected successfully`);
+    } catch (error) {
+      console.error(`[godot-mcp] Auto-start failed: ${error instanceof Error ? error.message : error}`);
+      console.error(`[godot-mcp] Continuing — Godot can be started via start_godot tool or manually`);
+    }
+  }
+
   if (httpMode) {
     // ── HTTP daemon mode ────────────────────────────────────────
     const MCP_HOST = '127.0.0.1';
@@ -160,7 +179,7 @@ async function main() {
         }
 
         if (!sessionId && isInitializeRequest(req.body)) {
-          const mcpServer = createMcpServer(godotBridge, VERSION);
+          const mcpServer = createMcpServer(godotBridge, VERSION, godotProcess);
           const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (sid) => {
@@ -230,7 +249,7 @@ async function main() {
     });
   } else {
     // stdio mode — single session
-    const server = createMcpServer(godotBridge, VERSION);
+    const server = createMcpServer(godotBridge, VERSION, godotProcess);
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(`[godot-mcp] MCP server ready (stdio)`);
@@ -257,6 +276,9 @@ async function shutdown() {
     }
   }
 
+  if (godotProcess) {
+    await godotProcess.stop();
+  }
   godotBridge.stop();
   process.exit(0);
 }

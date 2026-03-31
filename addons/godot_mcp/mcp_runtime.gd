@@ -67,11 +67,21 @@ func _execute_command(request_id: int, command: String, args: Dictionary) -> voi
 			_handle_watch_property(request_id, args)
 		"performance_stats":
 			_handle_performance_stats(request_id, args)
+		"eval_expression":
+			_handle_eval_expression(request_id, args)
+		"input_action":
+			_handle_input_action(request_id, args)
+		"key_event":
+			_handle_key_event(request_id, args)
 		_:
 			_send_response(request_id, {&"ok": false, &"error": "Unknown command: %s" % command})
 
 
 func _handle_screenshot(request_id: int, args: Dictionary) -> void:
+	if DisplayServer.get_name() == "headless":
+		_send_response(request_id, {&"ok": false, &"error": "Headless mode — screenshots unavailable. Use game_scene_tree, game_get_property, or eval_expression for verification."})
+		return
+
 	var screenshot_dir: String = args.get("screenshot_path", ".godot/mcp-screenshots/")
 	var abs_dir := ProjectSettings.globalize_path("res://" + screenshot_dir)
 
@@ -243,6 +253,100 @@ func _handle_get_property(request_id: int, args: Dictionary) -> void:
 		&"property": property,
 		&"value": value,
 	})
+
+
+func _handle_input_action(request_id: int, args: Dictionary) -> void:
+	var action: String = args.get("action", "")
+	if action.is_empty():
+		_send_response(request_id, {&"ok": false, &"error": "action is required"})
+		return
+
+	if not InputMap.has_action(action):
+		_send_response(request_id, {&"ok": false, &"error": "Action not in InputMap: %s" % action})
+		return
+
+	var pressed: bool = args.get("pressed", true)
+	var strength: float = args.get("strength", 1.0)
+	var duration_ms: int = int(args.get("duration_ms", 0))
+
+	var event = InputEventAction.new()
+	event.action = action
+	event.pressed = pressed
+	event.strength = strength
+	Input.parse_input_event(event)
+
+	if duration_ms > 0 and pressed:
+		await get_tree().create_timer(duration_ms / 1000.0).timeout
+		var release = InputEventAction.new()
+		release.action = action
+		release.pressed = false
+		release.strength = 0.0
+		Input.parse_input_event(release)
+
+	_send_response(request_id, {&"ok": true, &"action": action, &"pressed": pressed, &"duration_ms": duration_ms})
+
+
+func _handle_key_event(request_id: int, args: Dictionary) -> void:
+	var keycode_str: String = args.get("keycode", "")
+	if keycode_str.is_empty():
+		_send_response(request_id, {&"ok": false, &"error": "keycode is required"})
+		return
+
+	# Strip "KEY_" prefix if present, then resolve via OS
+	var key_name: String = keycode_str
+	if key_name.to_upper().begins_with("KEY_"):
+		key_name = key_name.substr(4)
+	var key_value: int = OS.find_keycode_from_string(key_name)
+	if key_value == KEY_NONE:
+		_send_response(request_id, {&"ok": false, &"error": "Unknown keycode: %s" % keycode_str})
+		return
+
+	var pressed: bool = args.get("pressed", true)
+	var duration_ms: int = int(args.get("duration_ms", 0))
+
+	var event = InputEventKey.new()
+	event.keycode = key_value
+	event.physical_keycode = key_value
+	event.pressed = pressed
+
+	Input.parse_input_event(event)
+
+	if duration_ms > 0 and pressed:
+		await get_tree().create_timer(duration_ms / 1000.0).timeout
+		var release = InputEventKey.new()
+		release.keycode = key_value
+		release.physical_keycode = key_value
+		release.pressed = false
+		Input.parse_input_event(release)
+
+	_send_response(request_id, {&"ok": true, &"keycode": keycode_str, &"pressed": pressed, &"duration_ms": duration_ms})
+
+
+func _handle_eval_expression(request_id: int, args: Dictionary) -> void:
+	var code: String = args.get("code", "")
+	var context_path: String = args.get("context_node", "/root")
+
+	if code.is_empty():
+		_send_response(request_id, {&"ok": false, &"error": "code is required"})
+		return
+
+	var context_node = get_node_or_null(NodePath(context_path))
+	if context_node == null:
+		_send_response(request_id, {&"ok": false, &"error": "Node not found: %s" % context_path})
+		return
+
+	var expr = Expression.new()
+	var parse_error = expr.parse(code)
+	if parse_error != OK:
+		_send_response(request_id, {&"ok": false, &"error": expr.get_error_text()})
+		return
+
+	var result = expr.execute([], context_node, true)
+	if expr.has_execute_failed():
+		_send_response(request_id, {&"ok": false, &"error": "Expression execution failed: %s" % expr.get_error_text()})
+		return
+
+	_send_response(request_id, {&"ok": true, &"result": _serialize_value(result)})
 
 
 func _serialize_value(value) -> Variant:

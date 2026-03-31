@@ -68,4 +68,52 @@ export const runtimeTools: ToolDefinition[] = [
       required: ['node_path', 'property']
     }
   },
+  {
+    name: 'send_input_action',
+    description: 'Simulate an InputMap action in the RUNNING game. The action must exist in the project\'s Input Map. If duration_ms > 0 and pressed is true, automatically releases after the duration. Requires a scene running via run_scene.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          description: 'InputMap action name (e.g., "move_right", "jump", "ui_accept").'
+        },
+        pressed: {
+          type: 'boolean',
+          description: 'Whether the action is pressed (true) or released (false). Default: true.'
+        },
+        strength: {
+          type: 'number',
+          description: 'Action strength from 0.0 to 1.0 (for analog inputs). Default: 1.0.'
+        },
+        duration_ms: {
+          type: 'number',
+          description: 'If > 0 and pressed is true, hold the action for this many milliseconds then release. Default: 0 (instant press or release).'
+        }
+      },
+      required: ['action']
+    }
+  },
+  {
+    name: 'send_key_event',
+    description: 'Simulate a keyboard key press/release in the RUNNING game. Use Godot Key enum names (e.g., "KEY_SPACE", "KEY_W", "KEY_ESCAPE"). Requires a scene running via run_scene.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        keycode: {
+          type: 'string',
+          description: 'Godot Key enum name (e.g., "KEY_SPACE", "KEY_W", "KEY_UP", "KEY_ESCAPE", "KEY_ENTER").'
+        },
+        pressed: {
+          type: 'boolean',
+          description: 'Whether the key is pressed (true) or released (false). Default: true.'
+        },
+        duration_ms: {
+          type: 'number',
+          description: 'If > 0 and pressed is true, hold the key for this many milliseconds then release. Default: 0 (instant).'
+        }
+      },
+      required: ['keycode']
+    }
+  },
 ];

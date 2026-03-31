@@ -19,14 +19,18 @@ import {
 import { readFileSync, existsSync } from 'node:fs';
 
 import { GodotBridge } from './bridge/godot-bridge.js';
+import { GodotProcess } from './bridge/godot-process.js';
 import { allTools, toolExists } from './tools/index.js';
+import { lifecycleToolNames } from './tools/lifecycle-tools.js';
+import { assertToolNames, handleAssertTool } from './tools/assert-tools.js';
 import { staticResources, resourceTemplates, readResource } from './resources/index.js';
 
 const SERVER_NAME = '@drunik/godot-mcp';
 
 export function createMcpServer(
   godotBridge: GodotBridge,
-  version: string
+  version: string,
+  godotProcess?: GodotProcess
 ): Server {
   const server = new Server(
     { name: SERVER_NAME, version },
@@ -94,6 +98,17 @@ export function createMcpServer(
       );
     }
 
+    // Lifecycle tools work before Godot is connected
+    if (lifecycleToolNames.has(name)) {
+      try {
+        const result = await handleLifecycleTool(name, toolArgs, godotBridge, godotProcess);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: 'text', text: JSON.stringify({ error: msg }, null, 2) }], isError: true };
+      }
+    }
+
     // Require Godot connection
     if (!godotBridge.isConnected()) {
       const wsPort = godotBridge.getStatus().port;
@@ -108,6 +123,18 @@ export function createMcpServer(
         }],
         isError: true
       };
+    }
+
+    // Assert meta-tools: handled in TypeScript, call bridge internally
+    if (assertToolNames.has(name)) {
+      try {
+        const toolTimeout = parseInt(process.env.GODOT_MCP_TIMEOUT_MS || '30000', 10);
+        const result = await handleAssertTool(name, toolArgs, godotBridge, toolTimeout);
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: 'text', text: JSON.stringify({ error: msg }, null, 2) }], isError: true };
+      }
     }
 
     // Invoke tool on Godot
@@ -233,4 +260,82 @@ export function createMcpServer(
   });
 
   return server;
+}
+
+// ── Lifecycle tool handler ──────────────────────────────────────────
+
+async function handleLifecycleTool(
+  name: string,
+  args: Record<string, unknown>,
+  bridge: GodotBridge,
+  godotProcess?: GodotProcess
+): Promise<unknown> {
+  switch (name) {
+    case 'start_godot': {
+      if (bridge.isConnected()) {
+        const status = bridge.getStatus();
+        return {
+          ok: true,
+          already_connected: true,
+          project_path: status.projectPath || null,
+          message: 'Godot is already connected. Use stop_godot first to restart.'
+        };
+      }
+      if (!godotProcess) {
+        return {
+          ok: false,
+          error: 'Process management not available. Start the server with --project <path> to enable, or start Godot manually.'
+        };
+      }
+      const projectPath = args.project_path as string;
+      if (!projectPath) {
+        return { ok: false, error: 'project_path is required.' };
+      }
+      await godotProcess.start(bridge, {
+        projectPath,
+        headless: (args.headless as boolean) ?? true,
+        extraArgs: (args.extra_args as string[]) ?? [],
+      });
+      const status = godotProcess.getStatus(bridge);
+      return {
+        ok: true,
+        pid: status.pid,
+        connected: status.connected,
+        message: `Godot started (PID ${status.pid}) and connected.`
+      };
+    }
+
+    case 'stop_godot': {
+      if (!godotProcess) {
+        return { ok: false, error: 'Process management not available — Godot was started externally.' };
+      }
+      await godotProcess.stop();
+      return { ok: true, message: 'Godot process stopped.' };
+    }
+
+    case 'godot_process_status': {
+      if (!godotProcess) {
+        // Still useful: show bridge connection status even without managed process
+        const bridgeStatus = bridge.getStatus();
+        return {
+          managed: false,
+          running: false,
+          connected: bridgeStatus.connected,
+          project_path: bridgeStatus.projectPath || null,
+          message: 'No managed process — Godot was started externally or not yet started.'
+        };
+      }
+      const status = godotProcess.getStatus(bridge);
+      return {
+        managed: true,
+        ...status,
+        message: status.running
+          ? `Godot running (PID ${status.pid}, uptime ${Math.round((status.uptimeMs || 0) / 1000)}s)`
+          : `Godot not running (last exit code: ${status.exitCode})`
+      };
+    }
+
+    default:
+      return { ok: false, error: `Unknown lifecycle tool: ${name}` };
+  }
 }

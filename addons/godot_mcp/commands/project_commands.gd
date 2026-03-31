@@ -27,6 +27,7 @@ func get_supported_tools() -> PackedStringArray:
 		"scene_tree_dump", "list_settings", "update_project_settings",
 		"configure_input_map", "rescan_filesystem", "run_scene",
 		"stop_scene", "is_playing", "classdb_query", "setup_autoload",
+		"eval_editor_expression",
 	])
 
 
@@ -70,6 +71,8 @@ func process_command(tool_name: String, args: Dictionary) -> Dictionary:
 			return is_playing(args)
 		"classdb_query":
 			return classdb_query(args)
+		"eval_editor_expression":
+			return eval_editor_expression(args)
 	return {&"ok": false, &"error": "Unknown project command: " + tool_name}
 
 
@@ -1048,3 +1051,52 @@ func classdb_query(args: Dictionary) -> Dictionary:
 		result[&"signals"] = signals_list
 
 	return result
+
+
+# ── eval_editor_expression ──────────────────────────────────────────
+
+func eval_editor_expression(args: Dictionary) -> Dictionary:
+	var code: String = str(args.get(&"code", ""))
+	if code.is_empty():
+		return {&"ok": false, &"error": "code is required"}
+
+	var plugin = Engine.get_meta("GodotMCPPlugin", null)
+	if plugin == null:
+		return {&"ok": false, &"error": "MCP plugin not available"}
+
+	var ei = plugin.get_editor_interface()
+
+	var expr = Expression.new()
+	var parse_error = expr.parse(code)
+	if parse_error != OK:
+		return {&"ok": false, &"error": expr.get_error_text()}
+
+	var result = expr.execute([], ei, true)
+	if expr.has_execute_failed():
+		return {&"ok": false, &"error": "Expression execution failed: %s" % expr.get_error_text()}
+
+	return {&"ok": true, &"result": _format_eval_result(result)}
+
+
+func _format_eval_result(value) -> Variant:
+	if value == null:
+		return null
+	if value is bool or value is int or value is float or value is String:
+		return value
+	if value is Vector2:
+		return {&"x": value.x, &"y": value.y}
+	if value is Vector3:
+		return {&"x": value.x, &"y": value.y, &"z": value.z}
+	if value is Color:
+		return {&"r": value.r, &"g": value.g, &"b": value.b, &"a": value.a}
+	if value is Array:
+		var arr: Array = []
+		for item in value:
+			arr.append(_format_eval_result(item))
+		return arr
+	if value is Dictionary:
+		var dict: Dictionary = {}
+		for key in value:
+			dict[str(key)] = _format_eval_result(value[key])
+		return dict
+	return str(value)

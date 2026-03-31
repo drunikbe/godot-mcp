@@ -99,5 +99,37 @@ export const scriptTools: ToolDefinition[] = [
       type: 'object',
       properties: {}
     }
+  },
+  {
+    name: 'eval_expression',
+    description: 'Evaluate a GDScript EXPRESSION in the RUNNING game and return the result. Requires a scene running via run_scene. EXPRESSIONS ONLY — no var, if, for, or multi-line code. Can call methods and access properties on the context node (e.g., "position.x", "get_tree().current_scene.name").',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'GDScript expression to evaluate (e.g., "health", "position.distance_to(Vector2.ZERO)", "get_children().size()").'
+        },
+        context_node: {
+          type: 'string',
+          description: 'Node path used as the base instance for the expression. Methods and properties resolve against this node. Default: "/root".'
+        }
+      },
+      required: ['code']
+    }
+  },
+  {
+    name: 'eval_editor_expression',
+    description: 'Evaluate a GDScript EXPRESSION in the EDITOR context (not the running game). Useful for querying project settings, editor state, and resource information. EXPRESSIONS ONLY.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'GDScript expression to evaluate in the editor (e.g., "ProjectSettings.get_setting(\'application/config/name\')").'
+        }
+      },
+      required: ['code']
+    }
   }
 ];
