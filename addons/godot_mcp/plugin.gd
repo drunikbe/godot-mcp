@@ -54,6 +54,7 @@ func _enter_tree() -> void:
 	# Connect signals
 	_mcp_client.connected.connect(_on_connected)
 	_mcp_client.disconnected.connect(_on_disconnected)
+	_mcp_client.reconnecting.connect(_on_reconnecting)
 	_mcp_client.tool_requested.connect(_on_tool_requested)
 
 	# Add status indicator to editor toolbar
@@ -96,6 +97,20 @@ func _check_runtime_debug_support() -> bool:
 ## Port discovery: the daemon writes .godot/mcp-daemon.json with its ports.
 ## We poll for this file after starting the daemon to get the WS port.
 func _ensure_daemon_running() -> void:
+	# If we were spawned by the daemon, skip auto-start (prevents recursion loop)
+	if OS.get_environment("GODOT_MCP_SPAWNED_BY_DAEMON") == "1":
+		print("[Godot MCP] Spawned by daemon — skipping auto-start")
+		# Poll for daemon file to discover port (daemon may still be writing it)
+		for i in range(20):  # up to 10 seconds
+			var info := _read_daemon_file()
+			if info.size() > 0:
+				_mcp_client_port = info.get("wsPort", MCPClientScript.DEFAULT_PORT)
+				print("[Godot MCP] Daemon ready (WS port %d)" % _mcp_client_port)
+				return
+			await get_tree().create_timer(0.5).timeout
+		push_warning("[Godot MCP] Daemon file not found after 10s — using default port")
+		return
+
 	var addon_path := ProjectSettings.globalize_path("res://addons/godot_mcp")
 	var real_addon_dir := _resolve_symlink(addon_path)
 	var server_dir := real_addon_dir.path_join("../../server").simplify_path()
@@ -252,24 +267,38 @@ func _exit_tree() -> void:
 
 func _setup_status_indicator() -> void:
 	_status_label = Label.new()
-	_status_label.text = "MCP: Connecting..."
-	_status_label.add_theme_color_override("font_color", Color.YELLOW)
 	_status_label.add_theme_font_size_override("font_size", 12)
 	add_control_to_container(EditorPlugin.CONTAINER_TOOLBAR, _status_label)
+	_update_status("connecting")
+
+
+func _update_status(state: String) -> void:
+	if not _status_label:
+		return
+	match state:
+		"disconnected":
+			_status_label.text = "☑️ MCP"
+			_status_label.add_theme_color_override("font_color", Color.RED)
+		"connecting":
+			_status_label.text = "🔄 MCP"
+			_status_label.add_theme_color_override("font_color", Color.YELLOW)
+		"connected":
+			_status_label.text = "✅ MCP"
+			_status_label.add_theme_color_override("font_color", Color.GREEN)
 
 
 func _on_connected() -> void:
 	print("[Godot MCP] Connected to MCP server")
-	if _status_label:
-		_status_label.text = "MCP: Connected"
-		_status_label.add_theme_color_override("font_color", Color.GREEN)
+	_update_status("connected")
+
+
+func _on_reconnecting() -> void:
+	_update_status("connecting")
 
 
 func _on_disconnected() -> void:
 	print("[Godot MCP] Disconnected from MCP server")
-	if _status_label:
-		_status_label.text = "MCP: Disconnected"
-		_status_label.add_theme_color_override("font_color", Color.RED)
+	_update_status("disconnected")
 	if _debugger_plugin:
 		_debugger_plugin.cancel_all_pending()
 

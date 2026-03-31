@@ -74,6 +74,7 @@ export class GodotProcess {
 
     this.child = spawn(this.godotPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, GODOT_MCP_SPAWNED_BY_DAEMON: '1' },
     });
     this.startedAt = Date.now();
 

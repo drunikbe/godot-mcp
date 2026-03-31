@@ -6,6 +6,7 @@ class_name MCPClient
 
 signal connected
 signal disconnected
+signal reconnecting
 signal tool_requested(request_id: String, tool_name: String, args: Dictionary)
 
 const DEFAULT_PORT := 6505
@@ -125,6 +126,7 @@ func _schedule_reconnect() -> void:
 
 
 func _on_reconnect_timer() -> void:
+	reconnecting.emit()
 	_attempt_connection()
 
 
