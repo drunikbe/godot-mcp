@@ -2,8 +2,8 @@
  * Daemon discovery via .godot/mcp-daemon.json files.
  *
  * When an HTTP daemon starts for a project, it writes a small JSON file
- * so that shims and plugins can find the running instance without
- * guessing ports.
+ * so that plugins and HTTP clients can find the running instance without
+ * guessing ports. Used only in daemon mode (not stdio mode).
  */
 
 import { readFileSync, writeFileSync, unlinkSync, existsSync, statSync } from 'node:fs';

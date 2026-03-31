@@ -1,12 +1,14 @@
 /**
- * Stdio-to-HTTP shim.
+ * @deprecated Stdio mode now runs in-process via StdioServerTransport (see
+ * the shimMode branch in index.ts). This module is retained for backward
+ * compatibility but is no longer imported by index.ts.
  *
- * When an MCP client spawns `node dist/index.js` expecting stdio,
- * this module proxies JSON-RPC messages to a running HTTP daemon.
- * If no daemon is running for the project, it starts one.
+ * Legacy stdio-to-HTTP shim.
  *
- * The shim is transparent — the AI client thinks it's talking to a
- * stdio server; the daemon thinks it's talking to an HTTP client.
+ * Previously, when an MCP client spawned `node dist/index.js` expecting stdio,
+ * this module proxied JSON-RPC messages to a running HTTP daemon. This was
+ * replaced by in-process stdio to eliminate a race condition where the daemon
+ * file was written after a 60s Godot timeout, while the shim only waited 15s.
  */
 
 import { spawn } from 'node:child_process';

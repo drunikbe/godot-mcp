@@ -7,8 +7,8 @@
  *   AI clients ──(HTTP POST /mcp)──▶ this server ──(WebSocket)──▶ Godot plugin
  *
  * Modes:
- *   daemon (default) — HTTP server, multiple AI clients share one Godot bridge
- *   shim   (auto)    — when spawned by a stdio MCP client, proxies to a daemon
+ *   stdio  (auto)    — when spawned by a stdio MCP client, runs in-process (like chrome-devtools-mcp)
+ *   daemon (--daemon) — HTTP server, multiple AI clients share one Godot bridge
  *
  * CLI flags:
  *   --project <path>  Godot project path (enables dynamic ports + process management)
@@ -25,6 +25,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
@@ -37,7 +38,6 @@ import { createMcpServer } from './server.js';
 import { toErrorMessage } from './util.js';
 import { projectPorts, DEFAULT_WS_PORT, DEFAULT_HTTP_PORT } from './ports.js';
 import { writeDaemonFile, removeDaemonFile, findProjectRoot } from './daemon-discovery.js';
-import { runShim } from './shim.js';
 
 const VERSION = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf-8')
@@ -75,14 +75,43 @@ const explicitDaemon = cliArgs.includes('--http');
 const shimMode = isStdinPipe && !explicitDaemon && !cliArgs.includes('--daemon');
 
 if (shimMode) {
-  // Stdio shim: proxy to HTTP daemon
-  const shimProject = projectPath || findProjectRoot(process.cwd());
-  if (!shimProject) {
+  // Stdio mode: run MCP server in-process (like chrome-devtools-mcp).
+  // No daemon, no shim proxy — the process IS the server.
+  const stdioProject = projectPath || findProjectRoot(process.cwd());
+  if (!stdioProject) {
     console.error('[godot-mcp] Cannot determine project path. Use --project <path> or run from within a Godot project directory.');
     process.exit(1);
   }
-  runShim(shimProject).catch((err) => {
-    console.error(`[godot-mcp] Shim error: ${err}`);
+
+  const godotBridge = new GodotBridge(WEBSOCKET_PORT, TOOL_TIMEOUT);
+  const godotProcess = new GodotProcess(process.env.GODOT_PATH);
+
+  (async () => {
+    await godotBridge.start();
+    console.error(`[godot-mcp] Starting v${VERSION} (stdio, WS:${WEBSOCKET_PORT}, project: ${stdioProject})`);
+
+    const server = createMcpServer(godotBridge, VERSION, TOOL_TIMEOUT, godotProcess, stdioProject);
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+
+    // Auto-start Godot in background (fire-and-forget, like chrome-devtools launches Chrome)
+    godotProcess.start(godotBridge, { projectPath: stdioProject, headless: true })
+      .then(() => console.error('[godot-mcp] Godot connected'))
+      .catch((err) => console.error(`[godot-mcp] Godot auto-start failed (tools still available): ${toErrorMessage(err)}`));
+
+    // Clean up when stdio closes
+    process.on('SIGINT', async () => {
+      await godotProcess.stop();
+      godotBridge.stop();
+      process.exit(0);
+    });
+    process.on('SIGTERM', async () => {
+      await godotProcess.stop();
+      godotBridge.stop();
+      process.exit(0);
+    });
+  })().catch((err) => {
+    console.error(`[godot-mcp] Stdio startup error: ${err}`);
     process.exit(1);
   });
 } else {
@@ -98,8 +127,13 @@ function runDaemon(godotBridge: GodotBridge, godotProcess: GodotProcess | undefi
 
   // ── Idle auto-shutdown ────────────────────────────────────────────
   let idleShutdownTimer: ReturnType<typeof setTimeout> | null = null;
+  const daemonStartedAt = Date.now();
+  const STARTUP_GRACE_MS = 60_000; // suppress idle shutdown during startup
 
   function checkIdleShutdown(): void {
+    // Grace period: give Godot time to connect and clients time to establish sessions
+    if (Date.now() - daemonStartedAt < STARTUP_GRACE_MS) return;
+
     const hasActiveSessions = Object.keys(httpSessions).length > 0;
     if (!godotBridge.isConnected() && !hasActiveSessions) {
       if (!idleShutdownTimer) {
@@ -188,19 +222,7 @@ function runDaemon(godotBridge: GodotBridge, godotProcess: GodotProcess | undefi
 
     console.error(`[godot-mcp] Waiting for Godot editor connection on port ${WEBSOCKET_PORT}...`);
 
-    // Auto-start Godot if --project was provided
-    if (godotProcess && projectPath) {
-      console.error(`[godot-mcp] Auto-starting Godot for project: ${projectPath}`);
-      try {
-        await godotProcess.start(godotBridge, { projectPath, headless: true });
-        console.error(`[godot-mcp] Godot connected successfully`);
-      } catch (error) {
-        console.error(`[godot-mcp] Auto-start failed: ${toErrorMessage(error)}`);
-        console.error(`[godot-mcp] Continuing — Godot can be started via start_godot tool or manually`);
-      }
-    }
-
-    // ── HTTP server ──────────────────────────────────────────────
+    // ── HTTP server (start BEFORE Godot so daemon file is written immediately) ──
     const MCP_HOST = '127.0.0.1';
     const app = createMcpExpressApp({ host: MCP_HOST });
 
@@ -290,6 +312,16 @@ function runDaemon(godotBridge: GodotBridge, godotProcess: GodotProcess | undefi
           wsPort: WEBSOCKET_PORT,
           projectPath,
         });
+      }
+
+      // Auto-start Godot AFTER HTTP is ready (fire-and-forget so daemon stays responsive)
+      if (godotProcess && projectPath) {
+        godotProcess.start(godotBridge, { projectPath, headless: true })
+          .then(() => console.error('[godot-mcp] Godot connected successfully'))
+          .catch((error) => {
+            console.error(`[godot-mcp] Auto-start failed: ${toErrorMessage(error)}`);
+            console.error(`[godot-mcp] Continuing — Godot can be started via start_godot tool or manually`);
+          });
       }
 
       checkIdleShutdown();
