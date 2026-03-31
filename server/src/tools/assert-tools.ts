@@ -312,6 +312,6 @@ function compare(
         return false;
       }
     default:
-      return actual === expected;
+      throw new Error(`Unknown comparator: ${comparator}`);
   }
 }

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-MCP server + Godot 4.x plugin: 51 tools, 9 resources, WebSocket bridge. See [README.md](README.md) for full docs.
+MCP server + Godot 4.x plugin: 61 tools, 9 resources, WebSocket bridge. See [README.md](README.md) for full docs.
 
 ## Quick Reference
 

@@ -5,7 +5,7 @@
  * Add new tool modules here as they are implemented.
  */
 
-import type { ToolDefinition } from './types.js';
+import type { ToolDefinition } from '../bridge/types.js';
 
 import { fileTools } from './file-tools.js';
 import { sceneTools } from './scene-tools.js';

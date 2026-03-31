@@ -20,7 +20,7 @@
     "dev": "tsc && node dist/index.js",
     "watch": "tsc --watch",
     "daemon": "tsx src/index.ts --http",
-    "test": "node --test tests/server.test.mjs"
+    "test": "node --test tests/*.test.mjs"
   },
   "keywords": [
     "mcp",

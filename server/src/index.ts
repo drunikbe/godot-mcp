@@ -33,6 +33,7 @@ import { readFileSync } from 'node:fs';
 import { GodotBridge } from './bridge/godot-bridge.js';
 import { GodotProcess } from './bridge/godot-process.js';
 import { createMcpServer } from './server.js';
+import { toErrorMessage } from './util.js';
 
 const VERSION = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf-8')
@@ -158,7 +159,7 @@ async function main() {
       await godotProcess.start(godotBridge, { projectPath, headless: true });
       console.error(`[godot-mcp] Godot connected successfully`);
     } catch (error) {
-      console.error(`[godot-mcp] Auto-start failed: ${error instanceof Error ? error.message : error}`);
+      console.error(`[godot-mcp] Auto-start failed: ${toErrorMessage(error)}`);
       console.error(`[godot-mcp] Continuing — Godot can be started via start_godot tool or manually`);
     }
   }
@@ -179,7 +180,7 @@ async function main() {
         }
 
         if (!sessionId && isInitializeRequest(req.body)) {
-          const mcpServer = createMcpServer(godotBridge, VERSION, godotProcess);
+          const mcpServer = createMcpServer(godotBridge, VERSION, TOOL_TIMEOUT, godotProcess);
           const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (sid) => {
@@ -249,7 +250,7 @@ async function main() {
     });
   } else {
     // stdio mode — single session
-    const server = createMcpServer(godotBridge, VERSION, godotProcess);
+    const server = createMcpServer(godotBridge, VERSION, TOOL_TIMEOUT, godotProcess);
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(`[godot-mcp] MCP server ready (stdio)`);

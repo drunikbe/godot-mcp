@@ -20,6 +20,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 import { GodotBridge } from './bridge/godot-bridge.js';
 import { GodotProcess } from './bridge/godot-process.js';
+import { toErrorMessage } from './util.js';
 import { allTools, toolExists } from './tools/index.js';
 import { lifecycleToolNames } from './tools/lifecycle-tools.js';
 import { assertToolNames, handleAssertTool } from './tools/assert-tools.js';
@@ -30,6 +31,7 @@ const SERVER_NAME = '@drunik/godot-mcp';
 export function createMcpServer(
   godotBridge: GodotBridge,
   version: string,
+  toolTimeoutMs: number,
   godotProcess?: GodotProcess
 ): Server {
   const server = new Server(
@@ -104,8 +106,7 @@ export function createMcpServer(
         const result = await handleLifecycleTool(name, toolArgs, godotBridge, godotProcess);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return { content: [{ type: 'text', text: JSON.stringify({ error: msg }, null, 2) }], isError: true };
+        return { content: [{ type: 'text', text: JSON.stringify({ error: toErrorMessage(error) }, null, 2) }], isError: true };
       }
     }
 
@@ -128,12 +129,10 @@ export function createMcpServer(
     // Assert meta-tools: handled in TypeScript, call bridge internally
     if (assertToolNames.has(name)) {
       try {
-        const toolTimeout = parseInt(process.env.GODOT_MCP_TIMEOUT_MS || '30000', 10);
-        const result = await handleAssertTool(name, toolArgs, godotBridge, toolTimeout);
+        const result = await handleAssertTool(name, toolArgs, godotBridge, toolTimeoutMs);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        return { content: [{ type: 'text', text: JSON.stringify({ error: msg }, null, 2) }], isError: true };
+        return { content: [{ type: 'text', text: JSON.stringify({ error: toErrorMessage(error) }, null, 2) }], isError: true };
       }
     }
 
@@ -177,7 +176,7 @@ export function createMcpServer(
               content: [{
                 type: 'text' as const,
                 text: JSON.stringify({
-                  error: `Failed to read screenshot: ${readError instanceof Error ? readError.message : String(readError)}`,
+                  error: `Failed to read screenshot: ${toErrorMessage(readError)}`,
                   path: filePath
                 }, null, 2)
               }],
@@ -194,12 +193,11 @@ export function createMcpServer(
         }]
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
-            error: errorMessage,
+            error: toErrorMessage(error),
             tool: name,
             args: toolArgs,
             hint: 'The tool call was sent to Godot but failed. Check Godot editor for details.'
@@ -251,10 +249,9 @@ export function createMcpServer(
         }]
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
       throw new McpError(
         ErrorCode.InvalidRequest,
-        `Failed to read resource ${uri}: ${errorMessage}`
+        `Failed to read resource ${uri}: ${toErrorMessage(error)}`
       );
     }
   });
