@@ -23,7 +23,8 @@ func set_screenshot_path(path: String) -> void:
 func get_supported_tools() -> PackedStringArray:
 	return PackedStringArray([
 		"game_screenshot", "game_scene_tree",
-		"game_get_properties", "game_get_property"
+		"game_get_properties", "game_get_property",
+		"eval_expression", "send_input_action", "send_key_event"
 	])
 
 
@@ -37,6 +38,12 @@ func process_command(tool_name: String, args: Dictionary) -> Dictionary:
 			return await handle_game_get_properties(args)
 		"game_get_property":
 			return await handle_game_get_property(args)
+		"eval_expression":
+			return await handle_eval_expression(args)
+		"send_input_action":
+			return await handle_send_input_action(args)
+		"send_key_event":
+			return await handle_send_key_event(args)
 	return {&"ok": false, &"error": "Unknown runtime command: " + tool_name}
 
 
@@ -81,3 +88,42 @@ func handle_game_get_property(args: Dictionary) -> Dictionary:
 		return {&"ok": false, &"error": "property is required"}
 	var cmd_args := {&"node_path": args.node_path, &"property": args.property}
 	return await _debugger_plugin.send_command("get_property", cmd_args, _debugger_timeout_sec)
+
+
+func handle_eval_expression(args: Dictionary) -> Dictionary:
+	if _debugger_plugin == null or not _debugger_plugin.has_active_session():
+		return {&"ok": false, &"error": "No active debug session — is the game running? Use run_scene to launch."}
+	if not args.has("code"):
+		return {&"ok": false, &"error": "code is required"}
+	var cmd_args := {&"code": args.code}
+	if args.has("context_node"):
+		cmd_args[&"context_node"] = args.context_node
+	return await _debugger_plugin.send_command("eval_expression", cmd_args, _debugger_timeout_sec)
+
+
+func handle_send_input_action(args: Dictionary) -> Dictionary:
+	if _debugger_plugin == null or not _debugger_plugin.has_active_session():
+		return {&"ok": false, &"error": "No active debug session — is the game running? Use run_scene to launch."}
+	if not args.has("action"):
+		return {&"ok": false, &"error": "action is required"}
+	var cmd_args := {&"action": args.action}
+	if args.has("pressed"):
+		cmd_args[&"pressed"] = args.pressed
+	if args.has("strength"):
+		cmd_args[&"strength"] = args.strength
+	if args.has("duration_ms"):
+		cmd_args[&"duration_ms"] = args.duration_ms
+	return await _debugger_plugin.send_command("input_action", cmd_args, _debugger_timeout_sec)
+
+
+func handle_send_key_event(args: Dictionary) -> Dictionary:
+	if _debugger_plugin == null or not _debugger_plugin.has_active_session():
+		return {&"ok": false, &"error": "No active debug session — is the game running? Use run_scene to launch."}
+	if not args.has("keycode"):
+		return {&"ok": false, &"error": "keycode is required"}
+	var cmd_args := {&"keycode": args.keycode}
+	if args.has("pressed"):
+		cmd_args[&"pressed"] = args.pressed
+	if args.has("duration_ms"):
+		cmd_args[&"duration_ms"] = args.duration_ms
+	return await _debugger_plugin.send_command("key_event", cmd_args, _debugger_timeout_sec)

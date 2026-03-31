@@ -168,14 +168,16 @@ func validate_script(args: Dictionary) -> Dictionary:
 	if not script.can_instantiate():
 		return {
 			&"ok": true,
-			&"valid": false,
+			&"valid": true,
+			&"can_instantiate": false,
 			&"path": path,
-			&"message": "Script parsed but cannot be instantiated (may have dependency errors)"
+			&"message": "Syntax OK. Script may need editor rescan before it can be used in scenes."
 		}
 
 	return {
 		&"ok": true,
 		&"valid": true,
+		&"can_instantiate": true,
 		&"path": path,
 		&"message": "No syntax errors found"
 	}
@@ -254,6 +256,11 @@ func delete_file(args: Dictionary) -> Dictionary:
 	var err := DirAccess.remove_absolute(path)
 	if err != OK:
 		return {&"ok": false, &"error": "Failed to delete file: " + str(err)}
+
+	# Clean up associated .import file if one exists
+	var import_path := path + ".import"
+	if FileAccess.file_exists(import_path):
+		DirAccess.remove_absolute(import_path)
 
 	_refresh_filesystem()
 	return {&"ok": true, &"path": path, &"message": "File deleted" + (" (backup created)" if create_backup else "")}

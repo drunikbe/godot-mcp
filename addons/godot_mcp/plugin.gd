@@ -194,6 +194,7 @@ func _inject_runtime_autoload() -> bool:
 		if existing != "*res://addons/godot_mcp/mcp_runtime.gd":
 			push_warning("[Godot MCP] Autoload __MCPRuntimeBridge__ already exists with different script")
 			return false
+		_autoload_injected = true
 		return true
 
 	add_autoload_singleton("__MCPRuntimeBridge__", "res://addons/godot_mcp/mcp_runtime.gd")

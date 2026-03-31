@@ -20,7 +20,8 @@
     "dev": "tsc && node dist/index.js",
     "watch": "tsc --watch",
     "daemon": "tsx src/index.ts --daemon",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "node --test tests/e2e-headless.mjs"
   },
   "keywords": [
     "mcp",
