@@ -1,6 +1,6 @@
 {
   "name": "@elfensky/godot-mcp",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "MCP server for Godot game engine integration",
   "repository": {
     "type": "git",

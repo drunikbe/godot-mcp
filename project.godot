@@ -1,0 +1,12 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; but it can also be manually edited.
+
+[application]
+
+config/name="Godot MCP"
+config/features=PackedStringArray("4.4")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")

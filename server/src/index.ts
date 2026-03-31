@@ -215,7 +215,7 @@ function runDaemon(godotBridge: GodotBridge, godotProcess: GodotProcess | undefi
         }
 
         if (!sessionId && isInitializeRequest(req.body)) {
-          const mcpServer = createMcpServer(godotBridge, VERSION, TOOL_TIMEOUT, godotProcess);
+          const mcpServer = createMcpServer(godotBridge, VERSION, TOOL_TIMEOUT, godotProcess, projectPath);
           const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (sid) => {

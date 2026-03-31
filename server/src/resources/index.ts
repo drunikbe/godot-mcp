@@ -16,6 +16,7 @@
  */
 
 import type { GodotBridge } from '../bridge/godot-bridge.js';
+import { offlineToolNames, handleOfflineTool } from '../tools/offline-handlers.js';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -105,8 +106,16 @@ export const resourceTemplates: ResourceTemplateDefinition[] = [
  */
 export async function readResource(
   uri: string,
-  godotBridge: GodotBridge
+  godotBridge: GodotBridge,
+  projectPath?: string
 ): Promise<{ content: string; mimeType: string }> {
+  const resolvedProjectPath = projectPath || godotBridge.getStatus?.()?.projectPath;
+
+  // Offline resource fallback for filesystem-backed resources
+  if (!godotBridge.isConnected() && resolvedProjectPath) {
+    return readResourceOffline(uri, resolvedProjectPath);
+  }
+
   if (!godotBridge.isConnected()) {
     throw new Error('Godot editor is not connected. Open a project with the MCP plugin enabled.');
   }
@@ -163,4 +172,42 @@ export async function readResource(
   }
 
   throw new Error(`Unknown resource URI: ${uri}`);
+}
+
+// ── Offline resource reader ───────────────────────────────────────
+
+const offlineResourceURIs = new Set([
+  'godot://scenes',
+  'godot://scripts',
+]);
+
+async function readResourceOffline(
+  uri: string,
+  projectPath: string
+): Promise<{ content: string; mimeType: string }> {
+  if (uri === 'godot://scenes') {
+    const result = await handleOfflineTool('list_dir', { root: 'res://', recursive: true, filter: '*.tscn' }, projectPath);
+    return { content: JSON.stringify(result, null, 2), mimeType: 'application/json' };
+  }
+
+  if (uri === 'godot://scripts') {
+    const result = await handleOfflineTool('list_scripts', {}, projectPath);
+    return { content: JSON.stringify(result, null, 2), mimeType: 'application/json' };
+  }
+
+  const sceneMatch = uri.match(/^godot:\/\/scene\/(.+)$/);
+  if (sceneMatch) {
+    const result = await handleOfflineTool('read_scene', { scene_path: sceneMatch[1] }, projectPath);
+    return { content: JSON.stringify(result, null, 2), mimeType: 'application/json' };
+  }
+
+  const fileMatch = uri.match(/^godot:\/\/file\/(.+)$/);
+  if (fileMatch) {
+    const result = await handleOfflineTool('read_file', { path: fileMatch[1] }, projectPath);
+    return { content: JSON.stringify(result, null, 2), mimeType: 'text/plain' };
+  }
+
+  throw new Error(
+    `Resource "${uri}" requires a running Godot editor. Use the start_godot tool to launch one.`
+  );
 }

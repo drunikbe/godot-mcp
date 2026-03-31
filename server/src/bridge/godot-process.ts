@@ -85,10 +85,16 @@ export class GodotProcess {
       this.appendOutput(chunk.toString());
     });
 
-    this.child.on('error', (err) => {
-      this.log('error', `Failed to spawn Godot: ${err.message}`);
-      this.child = null;
-      this.startedAt = null;
+    // Track spawn errors so we can fail fast instead of waiting for the full timeout
+    let spawnError: Error | null = null;
+    const spawnErrorPromise = new Promise<never>((_, reject) => {
+      this.child!.on('error', (err) => {
+        this.log('error', `Failed to spawn Godot: ${err.message}`);
+        spawnError = err;
+        this.child = null;
+        this.startedAt = null;
+        reject(err);
+      });
     });
 
     this.child.on('exit', (code, signal) => {
@@ -97,14 +103,19 @@ export class GodotProcess {
       this.child = null;
     });
 
-    // Wait for the plugin to connect via WebSocket
+    // Wait for the plugin to connect via WebSocket, or fail fast on spawn error
     try {
-      const info = await bridge.waitForConnection(startupTimeoutMs);
+      const info = await Promise.race([
+        bridge.waitForConnection(startupTimeoutMs),
+        spawnErrorPromise,
+      ]);
       this.log('info', `Godot connected: ${info.projectPath || 'unknown project'}`);
     } catch (err) {
-      // Timeout — kill the process
-      this.log('error', `Godot did not connect within ${startupTimeoutMs}ms — killing process`);
-      await this.stop();
+      if (!spawnError) {
+        // Timeout — kill the process
+        this.log('error', `Godot did not connect within ${startupTimeoutMs}ms — killing process`);
+        await this.stop();
+      }
       throw err;
     }
   }

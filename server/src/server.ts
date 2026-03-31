@@ -24,6 +24,7 @@ import { toErrorMessage } from './util.js';
 import { allTools, toolExists } from './tools/index.js';
 import { lifecycleToolNames } from './tools/lifecycle-tools.js';
 import { assertToolNames, handleAssertTool } from './tools/assert-tools.js';
+import { offlineToolNames, handleOfflineTool, hasPendingRescan, clearPendingRescan } from './tools/offline-handlers.js';
 import { staticResources, resourceTemplates, readResource } from './resources/index.js';
 
 const SERVER_NAME = '@elfensky/godot-mcp';
@@ -32,12 +33,24 @@ export function createMcpServer(
   godotBridge: GodotBridge,
   version: string,
   toolTimeoutMs: number,
-  godotProcess?: GodotProcess
+  godotProcess?: GodotProcess,
+  projectPath?: string
 ): Server {
   const server = new Server(
     { name: SERVER_NAME, version },
     { capabilities: { tools: {}, resources: {} } }
   );
+
+  // ── Rescan on reconnect (after offline writes) ──────────────────
+
+  godotBridge.onConnectionChange((connected) => {
+    if (connected && hasPendingRescan()) {
+      clearPendingRescan();
+      godotBridge.invokeTool('rescan_filesystem', {}).catch(() => {
+        // Best-effort: if rescan fails, the editor will eventually notice
+      });
+    }
+  });
 
   // ── List tools ───────────────────────────────────────────────────
 
@@ -110,16 +123,32 @@ export function createMcpServer(
       }
     }
 
+    // Offline tools — filesystem operations that work without Godot
+    if (!godotBridge.isConnected() && offlineToolNames.has(name)) {
+      const resolvedProjectPath = projectPath || godotBridge.getStatus().projectPath;
+      if (resolvedProjectPath) {
+        try {
+          const result = await handleOfflineTool(name, toolArgs, resolvedProjectPath);
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        } catch (error) {
+          return { content: [{ type: 'text', text: JSON.stringify({ error: toErrorMessage(error) }, null, 2) }], isError: true };
+        }
+      }
+    }
+
     // Require Godot connection
     if (!godotBridge.isConnected()) {
       const wsPort = godotBridge.getStatus().port;
+      const toolSpecificHint = offlineToolNames.has(name)
+        ? `This tool can work offline, but no project path is known. Start the server with --project <path>.`
+        : `This tool requires a running Godot editor. Use the start_godot tool to launch one, or open a Godot project with the MCP plugin enabled (port ${wsPort}).`;
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
             error: 'Godot editor is not connected',
             tool: name,
-            hint: `Open a Godot project with the MCP plugin enabled. The plugin will auto-connect on port ${wsPort}.`
+            hint: toolSpecificHint
           }, null, 2)
         }],
         isError: true
@@ -240,7 +269,7 @@ export function createMcpServer(
     const { uri } = request.params;
 
     try {
-      const { content, mimeType } = await readResource(uri, godotBridge);
+      const { content, mimeType } = await readResource(uri, godotBridge, projectPath);
       return {
         contents: [{
           uri,

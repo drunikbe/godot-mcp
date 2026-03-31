@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-31
+
+### Added
+- **Offline mode**: 10 tools now work without Godot running (`list_dir`, `read_file`, `search_project`, `list_scripts`, `read_scene`, `create_script`, `edit_script`, `create_folder`, `delete_file`, `rename_file`)
+- Offline resource fallbacks: `godot://scripts`, `godot://scenes`, `godot://file/{path}`, `godot://scene/{path}` serve from filesystem when Godot is disconnected
+- Path traversal protection on all `res://` path resolution (guards against `res://../../../etc/passwd`)
+- Mandatory `rescan_filesystem` on Godot reconnect after offline writes
+- Tool-specific error messages for Godot-required tools (hints to use `start_godot`)
+- `project.godot` file for proper Godot project structure
+- Offline handler unit tests (31 tests) and E2E tests (67 tests)
+
+### Fixed
+- `GodotProcess.start()` now fails fast on spawn errors (ENOENT) instead of blocking for 60s — daemon starts in ~1s when Godot binary is unavailable
+
 ## [0.2.3] - 2026-03-31
 
 ### Fixed
