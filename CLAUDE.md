@@ -31,11 +31,12 @@ MCP server + Godot 4.x plugin: 61 tools, 9 resources, WebSocket bridge. See [REA
 
 ## Architecture
 
-```
-AI Client (stdio) ──> shim ──┐
-                              ├──(HTTP)──> daemon ──(WebSocket)──> Godot plugin ──> commands
-AI Client (HTTP)  ────────────┘                                          │
-                                                              DebuggerPlugin ──> running game
+```mermaid
+graph LR
+    S["AI (stdio)"] --> Shim --> |HTTP| D["Daemon"]
+    H["AI (HTTP)"] --> |HTTP| D
+    D --> |WebSocket| P["Godot plugin"] --> C["Commands"]
+    P --> Dbg["DebuggerPlugin"] --> G["Running game"]
 ```
 
 - **HTTP daemon**: persistent process, multiple AI clients share one Godot connection

@@ -6,13 +6,13 @@ Works with any MCP-compatible AI client: Claude Code, Claude Desktop, Cursor, Wi
 
 ## How It Works
 
-```
-AI Client (stdio) ──> shim ──┐
-                              ├──(HTTP)──> daemon ──(WebSocket)──> Godot Plugin
-AI Client (HTTP)  ────────────┘                                       |
-                                                                Command execution
-                                                                Scene manipulation
-                                                                Runtime debugging
+```mermaid
+graph LR
+    A1["AI Client (stdio)"] --> Shim["Shim"]
+    Shim -->|HTTP| Daemon["Node.js Daemon"]
+    A2["AI Client (HTTP)"] -->|HTTP| Daemon
+    Daemon -->|WebSocket| Plugin["Godot Plugin"]
+    Plugin --> Exec["Command execution\nScene manipulation\nRuntime debugging"]
 ```
 
 The system has two layers:
@@ -196,38 +196,35 @@ The daemon writes `.godot/mcp-daemon.json` with its actual ports so that shims a
 
 ### Data Flow
 
-```
-                    ┌─────────────────────────────────────────────┐
-                    │              Node.js Daemon                  │
- AI (stdio) ──>     │                                              │
-   shim ──────────> │  HTTP ──> MCP Server ──> GodotBridge        │
- AI (HTTP) ───────> │  :auto     (server.ts)    (WebSocket)        │
-                    │                 │              │              │
-                    │         Tool validation    :auto              │
-                    │         Resource serving       │              │
-                    │         Screenshot encoding    │              │
-                    └───────────────────────│────────┘
-                                           │
-                                           │ WebSocket
-                                           │
-                    ┌─────────────────────────────────────────────┐
-                    │              Godot Editor Process            │
-                    │                                              │
-                    │  MCPClient ──> CommandHandler ──> Processors │
-                    │  (WebSocket     (router)     FileCommands    │
-                    │   client)                    SceneCommands   │
-                    │      │                       ScriptCommands  │
-                    │      │                       ProjectCommands │
-                    │      │                       AssetCommands   │
-                    │      │                       RuntimeCommands │
-                    │      │                       VisualizerCmds  │
-                    │      │                                       │
-                    │   DebuggerPlugin ─────> Running Game         │
-                    │   (EditorDebugger       (__MCPRuntimeBridge) │
-                    │    Plugin)               screenshots         │
-                    │                          debug overlays      │
-                    │                          property watching   │
-                    └─────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Clients
+        S["AI Client (stdio)"]
+        H["AI Client (HTTP)"]
+    end
+
+    S --> Shim["Shim (stdio→HTTP)"]
+
+    subgraph Daemon["Node.js Daemon"]
+        MCP["MCP Server<br/>(server.ts)"]
+        Bridge["GodotBridge<br/>(WebSocket)"]
+        MCP -->|"Tool validation<br/>Resource serving<br/>Screenshot encoding"| Bridge
+    end
+
+    Shim -->|HTTP :auto| MCP
+    H -->|HTTP :auto| MCP
+
+    subgraph Godot["Godot Editor Process"]
+        Client["MCPClient<br/>(WebSocket)"]
+        Handler["CommandHandler<br/>(router)"]
+        Procs["FileCommands<br/>SceneCommands<br/>ScriptCommands<br/>ProjectCommands<br/>AssetCommands<br/>RuntimeCommands<br/>VisualizerCmds"]
+        Debugger["DebuggerPlugin"]
+        Game["Running Game<br/>(__MCPRuntimeBridge__)<br/>screenshots · overlays · props"]
+        Client --> Handler --> Procs
+        Client --> Debugger --> Game
+    end
+
+    Bridge -->|"WebSocket :auto"| Client
 ```
 
 ### Command Processing Pattern
