@@ -28,6 +28,9 @@ func _setup_session(session_id: int) -> void:
 	var session = get_session(session_id)
 	session.started.connect(_on_session_started.bind(session_id))
 	session.stopped.connect(_on_session_stopped.bind(session_id))
+	# If session is already active (e.g. plugin reloaded mid-play), activate now
+	if session.is_active():
+		_on_session_started(session_id)
 
 
 func _on_session_started(session_id: int) -> void:
@@ -46,12 +49,26 @@ func _on_session_stopped(session_id: int) -> void:
 
 
 func has_active_session() -> bool:
-	return _session_active
+	if _session_active:
+		return true
+	# Fallback: scan sessions in case we missed the started signal
+	for session in get_sessions():
+		if session.is_active():
+			_session_active = true
+			return true
+	return false
 
 
 func send_command(command: String, args: Dictionary, timeout_sec: float = 20.0) -> Dictionary:
 	if not has_active_session():
-		return {&"ok": false, &"error": "No active debug session — is the game running?"}
+		return {&"ok": false, &"error": "No active debug session — is the game running? Use run_scene to launch."}
+
+	# Resolve the active session ID if we recovered via fallback
+	if _active_session_id < 0:
+		for session in get_sessions():
+			if session.is_active():
+				_active_session_id = 0  # Default session
+				break
 
 	var request_id := _next_request_id
 	_next_request_id += 1

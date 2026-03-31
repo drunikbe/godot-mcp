@@ -431,8 +431,12 @@ describe('E2E Headless — Full Tool Coverage', () => {
       if (!status.playing) {
         const run = await callTool('run_scene');
         assert.ok(run.message);
-        // Wait for game to start and debugger to connect
-        await sleep(3000);
+      }
+      // Wait for game + debugger session to be ready (poll with a simple property check)
+      for (let i = 0; i < 20; i++) {
+        await sleep(500);
+        const r = await callTool('game_get_property', { node_path: '/root', property: 'name' });
+        if (r.ok !== false && r.value) break;
       }
       const check = await callTool('is_playing');
       gamePlaying = check.playing === true;
@@ -455,12 +459,6 @@ describe('E2E Headless — Full Tool Coverage', () => {
     });
 
     it('game_scene_tree', async () => {
-      // Ensure game is running before this test
-      const playing = await callTool('is_playing');
-      if (!playing.playing) {
-        await callTool('run_scene');
-        await sleep(3000);
-      }
       const r = await callTool('game_scene_tree', { max_depth: 2, max_nodes: 50 });
       if (r.error?.includes('No active debug session') || r.error?.includes('timed out')) {
         assert.ok(true, 'EXPECTED: debug session not active in headless (issue #1)');
