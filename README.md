@@ -129,9 +129,24 @@ npx @drunik/godot-mcp --daemon
 
 ### Configure Your AI Client
 
-**Claude Code / clients with streamable-http support:**
+Add a `.mcp.json` to your **Godot project root** (next to `project.godot`):
 
-Add to your project's `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "godot-mcp": {
+      "command": "npx",
+      "args": ["@drunik/godot-mcp"]
+    }
+  }
+}
+```
+
+This works with Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP client that supports stdio. The server auto-discovers the Godot project from the working directory and auto-starts a background daemon.
+
+**Alternative: streamable-http (for clients that support it)**
+
+If you prefer a persistent connection or have multiple AI clients sharing one Godot session:
 
 ```json
 {
@@ -144,22 +159,7 @@ Add to your project's `.mcp.json`:
 }
 ```
 
-> **Note:** The port (6506) is the default. If you use `--project`, each project gets a unique port via hash. Check `.godot/mcp-daemon.json` for the actual port.
-
-**Claude Desktop / stdio-only clients:**
-
-```json
-{
-  "mcpServers": {
-    "godot-mcp": {
-      "command": "node",
-      "args": ["/path/to/godot-mcp/server/dist/index.js", "--project", "/path/to/your-godot-project"]
-    }
-  }
-}
-```
-
-The shim auto-starts a background HTTP daemon and proxies stdio messages to it. The `--project` flag tells it which Godot project to connect to.
+> **Note:** The port (6506) is the default. With `--project`, each project gets a unique port via hash. Check `.godot/mcp-daemon.json` for the actual port.
 
 ## Configuration
 
